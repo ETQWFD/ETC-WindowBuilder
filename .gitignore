@@ -1,0 +1,29 @@
+# ===== 大型内置运行时（约1.1GB，随安装包/Release分发，不入Git）=====
+/runtime/
+/release/runtime/
+/runtime_dl/
+
+# ===== 编译中间/最终二进制（走 GitHub Release 附件）=====
+*.o
+*.obj
+/src/*.exe
+/release/ETC-WindowBuilder.exe
+/installer/*.exe
+
+# ===== 临时构建目录 =====
+/temp_build/
+/temp_encrypt/
+/temp_decrypt/
+/temp_*/
+*.tmp
+*.log
+
+# ===== 打包缓存 =====
+/build/
+/dist/
+*.spec
+
+# ===== 系统杂项 =====
+.DS_Store
+Thumbs.db
+*~

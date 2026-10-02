@@ -1,0 +1,32 @@
+ETC WindowBuilder 专业版 软件许可协议
+
+版权所有 (c) 2024-2026 ET / ET Studio。保留所有权利。
+
+开发者: ET
+测试者: 小态度轩, 威龙
+公司: ET Studio
+
+一、授权范围
+1. 您可免费安装、使用、复制本软件用于个人学习、教学与非营利用途的软件开发。
+2. 您可使用本软件生成、编译您自己的程序, 您对所生成程序拥有完整权利。
+3. 未经 ET 书面授权, 不得对本软件本身进行商业再分发、转售、出租或去除版权标识。
+
+二、免责声明
+本软件按"现状"提供, 不作任何明示或暗示担保。在任何情况下, 作者不对因使用
+本软件造成的任何直接或间接损失承担责任。
+
+三、第三方组件
+本安装包内置以下开源运行时, 其著作权与许可归各自权利人所有:
+- MinGW-w64 / GCC (GNU Compiler Collection): GNU GPL, 运行时库适用 GCC 运行时库例外条款。
+  详见 runtime\mingw64 下相关许可证文件。
+- CPython 3.11: PSF License (Python Software Foundation License)。
+  详见 runtime\python\LICENSE.txt。
+- Eclipse Temurin OpenJDK 17: GPL v2 + Classpath Exception。
+  详见 runtime\jdk\legal。
+
+四、版权标识
+本软件及其生成产物的文件属性中, CompanyName / Publisher 均为 ET,
+LegalCopyright 为 "(c) ET 2024-2026"。
+
+ET Studio
+2026
