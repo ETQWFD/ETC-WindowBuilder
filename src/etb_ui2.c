@@ -839,9 +839,20 @@ int etb_compile_c_source(const wchar_t *src, const wchar_t *out_exe, const wchar
     }
 }
 void etb_run_compiled(const wchar_t *exe){
-    wchar_t cmd[2048];
+    /* 规范启动: 提供有效的 STARTUPINFO / PROCESS_INFORMATION,
+       并以 EXE 所在目录为工作目录。此前三者传 NULL, 在 Wine 下
+       子进程缺少正确的桌面/启动信息, 致其 GDI+ 初始化空指针崩溃。 */
+    wchar_t cmd[2048], work[MAX_PATH];
+    STARTUPINFOW si; PROCESS_INFORMATION pi;
     swprintf(cmd, 2048, L"\"%ls\"", exe);
-    CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, NULL, NULL, NULL);
+    wcscpy(work, exe);
+    PathRemoveFileSpecW(work);
+    ZeroMemory(&si, sizeof(si)); si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+    if (CreateProcessW(NULL, cmd, NULL, NULL, FALSE, 0, NULL, work, &si, &pi)){
+        if (pi.hProcess) CloseHandle(pi.hProcess);
+        if (pi.hThread)  CloseHandle(pi.hThread);
+    }
 }
 void etb_do_compile_run(void){
     /* 生成代码 → 临时目录 → 编译 → 运行 */
