@@ -2,17 +2,17 @@
 
 > 一款用 **C 语言 / Win32 / GDI+** 从零实现的可视化 GUI 构建器，面向所有技术人员的学习与开发软件。
 
-开发者：**ET**　公司：**ET Studio**　测试：小态度轩, 威龙
-版权：**(c) ET 2024-2026**　版本：**12.0**
+开发者：**ETC**　公司：**ETC Studio**　测试：小态度轩, 威龙
+版权：**(c) ETC 2024-2026**　版本：**12.1**
 
 ---
 
 ## 下载安装（装完即用，无需另装任何编译器）
 
 - 完整离线安装包（内置 MinGW GCC + Python 3 + OpenJDK 17，约 1.1GB）：
-  **[ETCWindowBuilder-Setup-v12.0.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.0/ETCWindowBuilder-Setup-v12.0.exe)**
+  **[ETCWindowBuilder-Setup-v12.1.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.1/ETCWindowBuilder-Setup-v12.1.exe)**
 - 绿色版主程序（不含内置工具链）：
-  **[ETC-WindowBuilder.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.0/ETC-WindowBuilder.exe)**
+  **[ETC-WindowBuilder.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.1/ETC-WindowBuilder.exe)**
 - 全部版本见 [Releases](https://github.com/ETQWFD/ETC-WindowBuilder/releases)。支持 Windows 7/10/11 x64；Linux 下可用 Wine 运行。
 
 ![主界面](screenshots/41_main.png)
@@ -28,8 +28,8 @@
   - C（原生 Win32，可直接用内置 MinGW-w64 GCC 编译为独立 EXE）；
   - Python（tkinter，用内置 Python 直接运行）。
 - **Java 支持**：文件模式可直接编译运行 `.java`（内置 JDK 17）。
-- **ET 引擎加密工程文件**：`.nep` 项目采用 PBKDF2-SHA256 + ChaCha20 加密保存，可设密码。
-- **一键打包**：项目可编译为带 ET 版本资源与图标的 EXE，并可生成 NSIS 安装程序。
+- **ETC 引擎加密工程文件**：`.nep` 项目采用 PBKDF2-SHA256 + ChaCha20 加密保存，可设密码。
+- **一键打包**：项目可编译为带 ETC 版本资源与图标的 EXE，并可生成 NSIS 安装程序。
 - **内置完整工具链，装完即用**：安装包自带
   - `runtime\mingw64` —— MinGW-w64 GCC 14.2（C/C++ 编译器）
   - `runtime\python` —— Python 3.11（含 tkinter）
@@ -51,7 +51,7 @@ ETCWindowBuilder/
 
 ## 快速开始
 
-1. 运行安装包 `ETCWindowBuilder-Setup-v12.0.exe`（或直接运行绿色版 EXE）。
+1. 运行安装包 `ETCWindowBuilder-Setup-v12.1.exe`（或直接运行绿色版 EXE）。
 2. 左侧「设计」页点击工具箱添加组件，在中间画布拖拽定位，右侧面板修改属性。
 3. 切换「积木」页为按钮添加点击逻辑。
 4. 点顶部 **运行**：在 C 代码页编译运行 C 程序；在 Py 代码页运行 Python 程序。
@@ -89,5 +89,5 @@ cd installer && makensis ETCWindowBuilder.nsi
 
 ## 版权与许可
 
-本软件版权归 **ET / ET Studio** 所有，可自由用于学习与个人开发，禁止未经授权的商业再分发。
+本软件版权归 **ETC / ET Studio** 所有，可自由用于学习与个人开发，禁止未经授权的商业再分发。
 内置第三方运行时遵循各自开源许可（MinGW-w64 / GCC、CPython、Eclipse Temurin/OpenJDK），许可文本见 `runtime` 各目录。

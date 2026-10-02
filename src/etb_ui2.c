@@ -1,6 +1,6 @@
 /* ============================================================
  * etb_ui2.c - 积木编辑 / 代码视图 / 对话框 / 项目读写 / 编译打包
- * 版权: (c) ET 2024-2026
+ * 版权: (c) ETC 2024-2026
  * ============================================================ */
 #include "etb_internal.h"
 #include <wctype.h>
@@ -586,7 +586,7 @@ void etb_edit_block_dialog(int idx){
     di = etb_block_find(b->type);
     if (di < 0) return;
     if (g_blockdefs[di].nparams == 0){
-        MessageBoxW(g_app.hMain, L"该积木不需要参数。", L"ET窗口构建器", MB_OK|MB_ICONINFORMATION);
+        MessageBoxW(g_app.hMain, L"该积木不需要参数。", L"ETC窗口构建器", MB_OK|MB_ICONINFORMATION);
         return;
     }
     {
@@ -1021,6 +1021,25 @@ static int run_proc(const wchar_t *cmd, const wchar_t *dir, wchar_t *out, size_t
     CloseHandle(rd);
     return ok;
 }
+/* 仅保留 ASCII 字符(其余替成 '?'), 保证 windres 在 C locale 下
+   处理 .rc 版本资源不会因非 ASCII 字符串截断而报语法错误。 */
+static void ascii_only(const wchar_t *src, wchar_t *dst, size_t cap){
+    size_t i;
+    if (!cap) return;
+    for (i=0; i+1<cap && src && src[i]; i++)
+        dst[i] = (src[i] < 0x80 && src[i] != L'"') ? src[i] : L'?';
+    dst[i]=0;
+}
+/* 把 "12.0" / "12.0.1" 形式版本号转为 FILEVERSION 用的 "12,0,0,0"。 */
+static void ver_comma(const wchar_t *ver, wchar_t *out, size_t cap){
+    int vals[4]={12,0,0,0}; int n=0, cur=0; const wchar_t *p;
+    for (p=ver; p && *p && n<4; p++){
+        if (*p>=L'0' && *p<=L'9'){ cur=cur*10+(*p-L'0'); }
+        else { vals[n++]=cur; cur=0; }
+    }
+    if (n<4) vals[n]=cur;
+    swprintf(out, cap, L"%d,%d,%d,%d", vals[0],vals[1],vals[2],vals[3]);
+}
 int etb_compile_c_source(const wchar_t *src, const wchar_t *out_exe, const wchar_t *icon, wchar_t *err, size_t errcap){
     wchar_t gcc[MAX_PATH], rc[MAX_PATH], res[MAX_PATH];
     wchar_t cmd[4096];
@@ -1033,17 +1052,46 @@ int etb_compile_c_source(const wchar_t *src, const wchar_t *out_exe, const wchar
         wchar_t dir[MAX_PATH];
         wcsncpy(dir, src, MAX_PATH-1); dir[MAX_PATH-1]=0;
         PathRemoveFileSpecW(dir);
-        /* 生成资源文件(版本信息+图标), 版权 ET */
+        /* 生成资源文件(版本信息+图标), 版权 ETC */
         {
             wchar_t rcf[MAX_PATH]; FILE *f;
             swprintf(rcf, MAX_PATH, L"%ls\\app_ver.rc", dir);
             f = _wfopen(rcf, L"w");
             if (f){
-                /* 版本资源一律使用 ASCII, 避免 windres 在 C locale 下
-                   处理中文时截断字符串导致 .rc 语法错误; 版权归 ET */
-                fwprintf(f, L"1 VERSIONINFO\n FILEVERSION 11,0,0,0\n PRODUCTVERSION 11,0,0,0\n FILEOS 0x40004\n FILETYPE 0x1\n{\n BLOCK \"StringFileInfo\"\n {\n  BLOCK \"040904b0\"\n  {\n   VALUE \"CompanyName\", \"ET\"\n   VALUE \"FileDescription\", \"ETC WindowBuilder Application\"\n   VALUE \"FileVersion\", \"11.0\"\n   VALUE \"LegalCopyright\", \"Copyright (C) ET 2024-2026\"\n   VALUE \"ProductName\", \"ETC WindowBuilder App\"\n   VALUE \"ProductVersion\", \"11.0\"\n  }\n }\n BLOCK \"VarFileInfo\"\n {\n  VALUE \"Translation\", 0x409, 1200\n }\n}\n");
-                if (icon && icon[0]){
-                    fwprintf(f, L"2 ICON \"%ls\"\n", icon);
+                /* 版本/署名取打包设置并全部 ASCII 化, 避免 windres 在
+                   C locale 下截断非 ASCII 字符串; 开发者/版权归 ETC。 */
+                {
+                    wchar_t vc[32], va[64], vd[256], vapp[128], vcomp[128], vcopy[128];
+                    const wchar_t *ver = g_app.pkg_ver[0] ? g_app.pkg_ver : L"12.1";
+                    ver_comma(ver, vc, 32);
+                    ascii_only(ver, va, 64);
+                    ascii_only(g_app.pkg_desc[0]?g_app.pkg_desc:L"ETC WindowBuilder Application", vd, 256);
+                    ascii_only(g_app.pkg_app[0]?g_app.pkg_app:L"ETCWindowBuilderApp", vapp, 128);
+                    ascii_only(g_app.pkg_company[0]?g_app.pkg_company:L"ETC Studio", vcomp, 128);
+                    ascii_only(g_app.pkg_copy[0]?g_app.pkg_copy:L"Copyright (C) ETC 2024-2026", vcopy, 128);
+                    fwprintf(f,
+                        L"1 VERSIONINFO\n FILEVERSION %ls\n PRODUCTVERSION %ls\n FILEOS 0x40004\n FILETYPE 0x1\n{\n BLOCK \"StringFileInfo\"\n {\n  BLOCK \"040904b0\"\n {\n"
+                        L"   VALUE \"CompanyName\", \"%ls\"\n"
+                        L"   VALUE \"FileDescription\", \"%ls\"\n"
+                        L"   VALUE \"FileVersion\", \"%ls\"\n"
+                        L"   VALUE \"InternalName\", \"%ls\"\n"
+                        L"   VALUE \"LegalCopyright\", \"%ls\"\n"
+                        L"   VALUE \"OriginalFilename\", \"%ls.exe\"\n"
+                        L"   VALUE \"ProductName\", \"%ls\"\n"
+                        L"   VALUE \"ProductVersion\", \"%ls\"\n  }\n }\n"
+                        L" BLOCK \"VarFileInfo\"\n {\n  VALUE \"Translation\", 0x409, 1200\n }\n}\n",
+                        vc, vc, vcomp, vd, va, vapp, vcopy, vapp, vapp, va);
+                }
+                {
+                    /* 图标: 用户选择优先, 否则用构建器自带 app.ico;
+                       复制到构建目录的纯 ASCII 名 app.ico, 规避 windres
+                       处理中文/空格路径失败。资源 ID 固定 100。 */
+                    wchar_t ico_src[MAX_PATH], ico_dst2[MAX_PATH]; int have_icon=0;
+                    if (icon && icon[0]){ wcsncpy(ico_src,icon,MAX_PATH-1); ico_src[MAX_PATH-1]=0; }
+                    else { GetModuleFileNameW(g_app.hInst,ico_src,MAX_PATH); PathRemoveFileSpecW(ico_src); wcscat(ico_src,L"\\app.ico"); }
+                    swprintf(ico_dst2,MAX_PATH,L"%ls\\app.ico",dir);
+                    if (PathFileExistsW(ico_src) && CopyFileW(ico_src,ico_dst2,FALSE) && PathFileExistsW(ico_dst2)) have_icon=1;
+                    if (have_icon) fwprintf(f, L"100 ICON \"app.ico\"\n");
                 }
                 fclose(f);
             }
@@ -1259,8 +1307,8 @@ static int gen_nsis(const wchar_t *dir, const wchar_t *exe_name, const wchar_t *
     swprintf(lic, MAX_PATH, L"%ls\\LICENSE.txt", dir);
     pos = 0;
     NRAW(L"ETC WindowBuilder 专业版\n");
-    NRAW(L"开发者: ET  公司: ET Studio  版权: (c) ET 2024-2026\n");
-    NRAW(L"本软件版权归 ET 所有, 可自由用于学习与开发, 禁止未经授权的商业再分发。\n");
+    NRAW(L"开发者: " DEVELOPER_W L"  公司: " COMPANY_W L"  版权: " COPYRIGHT_W L"\n");
+    NRAW(L"本软件版权归 " DEVELOPER_W L" 所有, 可自由用于学习与开发, 禁止未经授权的商业再分发。\n");
     write_utf8_file(lic, buf);
 
     pos = 0;
@@ -1268,15 +1316,15 @@ static int gen_nsis(const wchar_t *dir, const wchar_t *exe_name, const wchar_t *
     NRAW(L"!include \"MUI2.nsh\"\n");
     NRAW(L"Name \"ETC WindowBuilder 专业版\"\n");
     NADD(L"OutFile \"%ls\"\n", setup_name);
-    NRAW(L"InstallDir \"$PROGRAMFILES\\ET Studio\\ETCWindowBuilder\"\n");
-    NRAW(L"InstallDirRegKey HKLM \"Software\\ETStudio\\ETCWindowBuilder\" \"\"\n");
+    NRAW(L"InstallDir \"$PROGRAMFILES\\ETC Studio\\ETCWindowBuilder\"\n");
+    NRAW(L"InstallDirRegKey HKLM \"Software\\ETCStudio\\ETCWindowBuilder\" \"\"\n");
     NRAW(L"RequestExecutionLevel admin\n");
-    NRAW(L"VIProductVersion \"11.0.0.0\"\n");
+    NRAW(L"VIProductVersion \"" VERSION_W L".0.0\"\n");
     NRAW(L"VIAddVersionKey \"ProductName\" \"ETC WindowBuilder\"\n");
-    NRAW(L"VIAddVersionKey \"CompanyName\" \"ET\"\n");
-    NRAW(L"VIAddVersionKey \"LegalCopyright\" \"(c) ET 2024-2026\"\n");
+    NRAW(L"VIAddVersionKey \"CompanyName\" \"" DEVELOPER_W L"\"\n");
+    NRAW(L"VIAddVersionKey \"LegalCopyright\" \"" COPYRIGHT_W L"\"\n");
     NRAW(L"VIAddVersionKey \"FileDescription\" \"ETC WindowBuilder 专业版 安装程序\"\n");
-    NRAW(L"VIAddVersionKey \"FileVersion\" \"11.0\"\n");
+    NRAW(L"VIAddVersionKey \"FileVersion\" \"" VERSION_W L"\"\n");
     NRAW(L"!insertmacro MUI_PAGE_WELCOME\n");
     NRAW(L"!insertmacro MUI_PAGE_LICENSE \"LICENSE.txt\"\n");
     NRAW(L"!insertmacro MUI_PAGE_DIRECTORY\n");
@@ -1290,15 +1338,15 @@ static int gen_nsis(const wchar_t *dir, const wchar_t *exe_name, const wchar_t *
     NADD(L"  File \"%ls\"\n", exe_name);
     NRAW(L"  File \"LICENSE.txt\"\n");
     NRAW(L"  File /r \"docs\"\n");
-    NRAW(L"  CreateDirectory \"$SMPROGRAMS\\ET Studio\"\n");
-    NADD(L"  CreateShortCut \"$SMPROGRAMS\\ET Studio\\ETC WindowBuilder.lnk\" \"$INSTDIR\\%ls\"\n", exe_name);
+    NRAW(L"  CreateDirectory \"$SMPROGRAMS\\ETC Studio\"\n");
+    NADD(L"  CreateShortCut \"$SMPROGRAMS\\ETC Studio\\ETC WindowBuilder.lnk\" \"$INSTDIR\\%ls\"\n", exe_name);
     NADD(L"  CreateShortCut \"$DESKTOP\\ETC WindowBuilder.lnk\" \"$INSTDIR\\%ls\"\n", exe_name);
     NRAW(L"  WriteUninstaller \"$INSTDIR\\Uninstall.exe\"\n");
     NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"DisplayName\" \"ETC WindowBuilder 专业版\"\n");
     NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"UninstallString\" \"\\\"$INSTDIR\\Uninstall.exe\\\"\"\n");
     NADD(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"DisplayIcon\" \"$INSTDIR\\%ls\"\n", exe_name);
-    NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"DisplayVersion\" \"11.0\"\n");
-    NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"Publisher\" \"ET\"\n");
+    NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"DisplayVersion\" \"12.1\"\n");
+    NRAW(L"  WriteRegStr HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\" \"Publisher\" \"ETC\"\n");
     NRAW(L"SectionEnd\n");
     NRAW(L"Section \"卸载\" SEC02\n");
     NADD(L"  Delete \"$INSTDIR\\%ls\"\n", exe_name);
@@ -1307,8 +1355,8 @@ static int gen_nsis(const wchar_t *dir, const wchar_t *exe_name, const wchar_t *
     NRAW(L"  Delete \"$INSTDIR\\Uninstall.exe\"\n");
     NRAW(L"  RMDir \"$INSTDIR\"\n");
     NRAW(L"  Delete \"$DESKTOP\\ETC WindowBuilder.lnk\"\n");
-    NRAW(L"  Delete \"$SMPROGRAMS\\ET Studio\\ETC WindowBuilder.lnk\"\n");
-    NRAW(L"  RMDir \"$SMPROGRAMS\\ET Studio\"\n");
+    NRAW(L"  Delete \"$SMPROGRAMS\\ETC Studio\\ETC WindowBuilder.lnk\"\n");
+    NRAW(L"  RMDir \"$SMPROGRAMS\\ETC Studio\"\n");
     NRAW(L"  DeleteRegKey HKLM \"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\ETCWindowBuilder\"\n");
     NRAW(L"SectionEnd\n");
     buf[pos]=0;

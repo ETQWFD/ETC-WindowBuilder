@@ -1,6 +1,6 @@
 1 VERSIONINFO
- FILEVERSION 12,0,0,0
- PRODUCTVERSION 12,0,0,0
+ FILEVERSION 12,1,0,0
+ PRODUCTVERSION 12,1,0,0
  FILEOS 0x40004
  FILETYPE 0x1
 {
@@ -8,15 +8,15 @@
  {
   BLOCK "040904B0"
   {
-   VALUE "CompanyName", "ET"
+   VALUE "CompanyName", "ETC"
    VALUE "FileDescription", "ETC WindowBuilder Professional"
-   VALUE "FileVersion", "12.0"
+   VALUE "FileVersion", "12.1"
    VALUE "InternalName", "ETC-WindowBuilder"
-   VALUE "LegalCopyright", "Copyright (c) ET 2024-2026"
+   VALUE "LegalCopyright", "Copyright (c) ETC 2024-2026"
    VALUE "OriginalFilename", "ETC-WindowBuilder.exe"
    VALUE "ProductName", "ETC WindowBuilder"
-   VALUE "ProductVersion", "12.0"
-   VALUE "Comments", "Developer: ET / ET Studio"
+   VALUE "ProductVersion", "12.1"
+   VALUE "Comments", "Developer: ETC / ETC Studio"
   }
  }
  BLOCK "VarFileInfo"
@@ -24,4 +24,5 @@
   VALUE "Translation", 0x409, 1200
  }
 }
-2 ICON "../assets/app.ico"
+#define IDI_APPICON 100
+IDI_APPICON ICON "../assets/app.ico"

@@ -1,8 +1,8 @@
 /* ============================================================
- * ET窗口构建器 专业版 (ETC WindowBuilder Professional)
+ * ETC窗口构建器 专业版 (ETC WindowBuilder Professional)
  * C语言 / Win32 / GDI+ 实现
- * 开发者: ET        公司: ET Studio
- * 版权: (c) ET 2024-2026  版本: 12.0
+ * 开发者: ETC       公司: ETC Studio
+ * 版权: (c) ETC 2024-2026  版本: 12.1
  * ============================================================ */
 #ifndef ETB_H
 #define ETB_H
@@ -22,14 +22,14 @@
 #include <string.h>
 #include <math.h>
 
-#define VERSION_W       L"12.0"
-#define VERSION_A       "12.0"
+#define VERSION_W       L"12.1"
+#define VERSION_A       "12.1"
 #define APP_NAME_W      L"ETC WindowBuilder"
-#define APP_TITLE_W     L"ET窗口构建器 专业版"
-#define DEVELOPER_W     L"ET"
+#define APP_TITLE_W     L"ETC窗口构建器 专业版"
+#define DEVELOPER_W     L"ETC"
 #define TESTERS_W       L"小态度轩, 威龙"
-#define COMPANY_W       L"ET Studio"
-#define COPYRIGHT_W     L"(c) ET 2024-2026"
+#define COMPANY_W       L"ETC Studio"
+#define COPYRIGHT_W     L"(c) ETC 2024-2026"
 #define FILE_EXT_W      L".nep"
 #define FILE_EXT_A      ".nep"
 

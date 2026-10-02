@@ -1,17 +1,18 @@
 ; ============================================================
-;  ETC WindowBuilder 专业版 v12.0  NSIS 安装脚本
-;  版权 (c) ET 2024-2026, ET Studio
+;  ETC WindowBuilder 专业版 v12.1  NSIS 安装脚本
+;  版权 (c) ETC 2024-2026, ETC Studio
 ;  内置 MinGW GCC / CPython / OpenJDK，装完即用
 ; ============================================================
 Unicode true
 !define APPNAME   "ETC WindowBuilder"
-!define COMPANY   "ET Studio"
-!define VERSION   "12.0"
+!define COMPANY   "ETC Studio"
+!define VERSION   "12.1"
 !define EXENAME   "ETC-WindowBuilder.exe"
+!define PUBLISHER "ETC"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ETCWindowBuilder"
 
 Name "${APPNAME} 专业版"
-OutFile "ETCWindowBuilder-Setup-v12.0.exe"
+OutFile "ETCWindowBuilder-Setup-v12.1.exe"
 InstallDir "$PROGRAMFILES64\${COMPANY}\ETCWindowBuilder"
 InstallDirRegKey HKLM "${UNINSTKEY}" "InstallLocation"
 RequestExecutionLevel admin
@@ -80,7 +81,7 @@ Section -Post
   WriteUninstaller "$INSTDIR\uninst.exe"
   WriteRegStr HKLM "${UNINSTKEY}" "DisplayName"     "${APPNAME} 专业版"
   WriteRegStr HKLM "${UNINSTKEY}" "DisplayVersion"  "${VERSION}"
-  WriteRegStr HKLM "${UNINSTKEY}" "Publisher"       "ET"
+  WriteRegStr HKLM "${UNINSTKEY}" "Publisher"       "${PUBLISHER}"
   WriteRegStr HKLM "${UNINSTKEY}" "DisplayIcon"     "$INSTDIR\app.ico"
   WriteRegStr HKLM "${UNINSTKEY}" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "${UNINSTKEY}" "UninstallString" '"$INSTDIR\uninst.exe"'

@@ -1,6 +1,6 @@
 /* ============================================================
  * etb_main.c - 程序入口 / 主窗口 / 菜单 / 布局管理
- * 版权: (c) ET 2024-2026
+ * 版权: (c) ETC 2024-2026
  * ============================================================ */
 #include "etb_internal.h"
 
@@ -246,10 +246,18 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
 /* ---------- 注册窗口类 ---------- */
 static void register_classes(HINSTANCE hInst){
     WNDCLASSEXW wc;
+    HICON hIcoBig, hIcoSm;
     memset(&wc,0,sizeof(wc));
     wc.cbSize = sizeof(wc); wc.hInstance = hInst;
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = NULL;
+    /* 修复左上角/任务栏图标: 从资源(IDI_APPICON=100)加载大、小两种尺寸 */
+    hIcoBig = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(100), IMAGE_ICON,
+                                GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR);
+    hIcoSm  = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(100), IMAGE_ICON,
+                                GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+    if (hIcoBig) wc.hIcon = hIcoBig;
+    if (hIcoSm)  wc.hIconSm = hIcoSm;
     wc.lpfnWndProc = PanelProc;  wc.lpszClassName = L"ETBPanel";  RegisterClassExW(&wc);
     wc.lpfnWndProc = ModalProc;  wc.lpszClassName = L"ETBDialog"; RegisterClassExW(&wc);
     wc.lpfnWndProc = CanvasProc; wc.lpszClassName = L"ETBCanvas"; RegisterClassExW(&wc);
@@ -295,6 +303,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmd, int nCmdSh
                                   NULL, NULL, hInstance, NULL);
     if (!g_app.hMain) return 0;
     SetWindowLongPtrW(g_app.hMain, GWLP_USERDATA, 0);
+    {
+        /* 显式设置标题栏(小)与任务栏/Alt-Tab(大)图标, 双保险 */
+        HICON _hb = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(100), IMAGE_ICON,
+                    GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR);
+        HICON _hs = (HICON)LoadImageW(hInstance, MAKEINTRESOURCEW(100), IMAGE_ICON,
+                    GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR);
+        if (_hb) SendMessageW(g_app.hMain, WM_SETICON, ICON_BIG, (LPARAM)_hb);
+        if (_hs) SendMessageW(g_app.hMain, WM_SETICON, ICON_SMALL, (LPARAM)_hs);
+    }
     SetMenu(g_app.hMain, create_menu_bar());
     etb_create_layout();
     ShowWindow(g_app.hMain, nCmdShow);
