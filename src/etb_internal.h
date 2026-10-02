@@ -35,9 +35,13 @@
 #define IDM_BGCOLOR  4304
 #define IDM_BGIMG    4305
 #define IDM_SYNC     4306
+#define IDM_UPDATE   4307
 #define IDM_ABOUT    4400
 #define IDM_HELP     4401
 #define IDM_BLOCKHELP 4402
+#define IDM_CODEC_EDIT 7001
+#define IDM_CODEPY_EDIT 7002
+#define IDT_CODEPARSE  5501
 #define IDM_TOOLBASE 5000
 #define IDM_PALADD   5100
 #define IDM_PALDEL   5101

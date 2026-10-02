@@ -2,7 +2,7 @@
  * ET窗口构建器 专业版 (ETC WindowBuilder Professional)
  * C语言 / Win32 / GDI+ 实现
  * 开发者: ET        公司: ET Studio
- * 版权: (c) ET 2024-2026  版本: 11.0
+ * 版权: (c) ET 2024-2026  版本: 12.0
  * ============================================================ */
 #ifndef ETB_H
 #define ETB_H
@@ -22,8 +22,8 @@
 #include <string.h>
 #include <math.h>
 
-#define VERSION_W       L"11.0"
-#define VERSION_A       "11.0"
+#define VERSION_W       L"12.0"
+#define VERSION_A       "12.0"
 #define APP_NAME_W      L"ETC WindowBuilder"
 #define APP_TITLE_W     L"ET窗口构建器 专业版"
 #define DEVELOPER_W     L"ET"
@@ -103,6 +103,8 @@ typedef struct {
     HWND hCompList;          /* 右侧组件树(可选) */
     Project proj;
     int  mode;
+    int  syncing;            /* 程序化刷新代码时置1, 屏蔽 EN_CHANGE 回环 */
+    int  parse_which;        /* 待解析的代码页 0=C 1=Py */
     int  sel;                /* 选中的组件ID 或 -1 */
     int  zoom;               /* 百分比 50..200 */
     int  dragging;
@@ -176,6 +178,10 @@ void etb_do_package(void);
 void etb_choose_bg_color(void);
 void etb_import_bg_image(void);
 void etb_sync_from_code(void);
+char *etb_current_code_utf8(int which, size_t *len); /* 0=C 1=Py: 优先取编辑器文本 */
+void etb_code_changed(int which);                     /* 代码编辑器 EN_CHANGE (防抖解析) */
+void etb_code_parse_now(void);                        /* 把当前代码反向同步到设计/积木 */
+void etb_check_update(void);                          /* 帮助: 检查更新 */
 void etb_show_window_settings(void);
 void etb_show_pack_settings(void);
 void etb_show_about(void);

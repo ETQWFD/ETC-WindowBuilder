@@ -1,17 +1,17 @@
 ; ============================================================
-;  ETC WindowBuilder 专业版 v11.0  NSIS 安装脚本
+;  ETC WindowBuilder 专业版 v12.0  NSIS 安装脚本
 ;  版权 (c) ET 2024-2026, ET Studio
 ;  内置 MinGW GCC / CPython / OpenJDK，装完即用
 ; ============================================================
 Unicode true
 !define APPNAME   "ETC WindowBuilder"
 !define COMPANY   "ET Studio"
-!define VERSION   "11.0"
+!define VERSION   "12.0"
 !define EXENAME   "ETC-WindowBuilder.exe"
 !define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\ETCWindowBuilder"
 
 Name "${APPNAME} 专业版"
-OutFile "ETCWindowBuilder-Setup-v11.0.exe"
+OutFile "ETCWindowBuilder-Setup-v12.0.exe"
 InstallDir "$PROGRAMFILES64\${COMPANY}\ETCWindowBuilder"
 InstallDirRegKey HKLM "${UNINSTKEY}" "InstallLocation"
 RequestExecutionLevel admin

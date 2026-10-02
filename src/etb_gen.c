@@ -242,10 +242,16 @@ static int build_secs(Project *p, Sec *secs, int cap){
 
 /* ================= C 代码生成 ================= */
 static char *buf_to_utf8(WBuf *b, size_t *outlen){
-    int n = WideCharToMultiByte(CP_UTF8, 0, b->p?b->p:L"", -1, NULL, 0, NULL, NULL);
+    /* 关键修复: cchWideChar 传显式长度(b->len)而非 -1。
+       旧实现传 -1 使返回长度含结尾 NUL, WriteFile 把 NUL 写进文件,
+       导致 main.py "cannot contain null bytes"、main.c 末尾空字符。 */
+    int wlen = (int)(b->len);
+    int n = WideCharToMultiByte(CP_UTF8, 0, b->p?b->p:L"", wlen, NULL, 0, NULL, NULL);
+    if (n <= 0) n = 0;
     char *out = (char*)malloc(n+1);
-    WideCharToMultiByte(CP_UTF8, 0, b->p?b->p:L"", -1, out, n, NULL, NULL);
-    if (outlen) *outlen = (size_t)n;
+    if (n > 0) WideCharToMultiByte(CP_UTF8, 0, b->p?b->p:L"", wlen, out, n, NULL, NULL);
+    out[n] = 0;
+    if (outlen) *outlen = (size_t)n;   /* 长度不含结尾 NUL */
     free(b->p);
     return out;
 }
@@ -330,7 +336,7 @@ char *etb_gen_c(Project *p, size_t *outlen){
         }
         if (c->type==CT_IMAGE && c->image_path[0]){
             esc_lit(c->image_path, t, 256);
-            wb_fmt(&b, L"        { GpImage *_im=NULL; if (GdipLoadImageFromFile(L\"%ls\", &_im)==Ok){ HBITMAP _hb=NULL; if (GdipCreateHBITMAPFromBitmap(_im,&_hb,0)==Ok) g_img[%d]=_hb; GdipDisposeImage(_im); } }\n", t, i);
+            wb_fmt(&b, L"        { GpBitmap *_bm=NULL; if (GdipCreateBitmapFromFile(L\"%ls\", &_bm)==Ok){ HBITMAP _hb=NULL; if (GdipCreateHBITMAPFromBitmap(_bm,&_hb,0)==Ok) g_img[%d]=_hb; GdipDisposeImage((GpImage*)_bm); } }\n", t, i);
         }
     }
     wb_add(&b, L"        on_init();\n        return 0;\n    }\n");
@@ -396,6 +402,7 @@ char *etb_gen_py(Project *p, size_t *outlen){
     wb_fmt(&b, L"        self.root.configure(bg=\"%ls\")\n", p->bg);
     wb_add(&b, L"        self.vars = {}\n        self.components = {}\n        self._pos = {}\n        self.create_widgets()\n        self.on_init()\n\n");
     wb_add(&b, L"    def create_widgets(self):\n");
+    if (p->ncomps==0) wb_add(&b, L"        pass  # 尚未添加组件\n");
     for (i=0;i<p->ncomps;i++){
         Component *c = &p->comps[i];
         wb_fmt(&b, L"        # 组件%d: %ls\n", c->id, c->text);
@@ -465,6 +472,8 @@ char *etb_gen_py(Project *p, size_t *outlen){
                 WBuf body; wchar_t *line, *nl;
                 wb_init(&body);
                 blocks_to_py(p, &body, secs[i].from, secs[i].to);
+                if (!body.p || body.len==0){ wb_add(&b, L"            pass\n"); free(body.p); }
+                else {
                 line = body.p;
                 while (line && *line){
                     nl = wcschr(line, L'\n');
@@ -472,6 +481,7 @@ char *etb_gen_py(Project *p, size_t *outlen){
                     else { wb_add(&b, L"            "); wb_add(&b, line); break; }
                 }
                 free(body.p);
+                }
             }
         }
     }

@@ -39,6 +39,7 @@ static HMENU create_menu_bar(void){
 
     HMENU mh = CreatePopupMenu();
     AppendMenuW(mh, MF_STRING, IDM_HELP, L"使用说明");
+    AppendMenuW(mh, MF_STRING, IDM_UPDATE, L"检查更新...");
     AppendMenuW(mh, MF_STRING, IDM_ABOUT, L"关于");
     AppendMenuW(bar, MF_POPUP, (UINT_PTR)mh, L"帮助(&H)");
     return bar;
@@ -156,7 +157,15 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
         case IDM_BGCOLOR: etb_choose_bg_color(); return 0;
         case IDM_BGIMG: etb_import_bg_image(); return 0;
         case IDM_HELP: case IDM_BLOCKHELP: etb_show_help(); return 0;
+        case IDM_UPDATE: etb_check_update(); return 0;
         case IDM_ABOUT: etb_show_about(); return 0;
+        /* 代码编辑器手动修改 → 防抖反向同步到设计/积木 */
+        case IDM_CODEC_EDIT:
+            if (HIWORD(wp)==EN_CHANGE) etb_code_changed(0);
+            return 0;
+        case IDM_CODEPY_EDIT:
+            if (HIWORD(wp)==EN_CHANGE) etb_code_changed(1);
+            return 0;
         case 0x9999:
             if (g_app.hLog) SetWindowTextW(g_app.hLog, L"");
             return 0;
@@ -220,6 +229,9 @@ static LRESULT CALLBACK MainProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
         case IDM_RIGHT_IMP: etb_import_file(); return 0;
         case IDM_RIGHT_DEL: etb_delete_file(); return 0;
         }
+        return 0;
+    case WM_TIMER:
+        if (wp==IDT_CODEPARSE){ KillTimer(hwnd, IDT_CODEPARSE); etb_code_parse_now(); }
         return 0;
     case WM_CLOSE:
         DestroyWindow(hwnd);

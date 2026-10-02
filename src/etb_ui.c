@@ -14,18 +14,22 @@ HBITMAP etb_load_image(const wchar_t *path, int *w, int *h){
     for (i=0;i<g_nimgs;i++) if (wcscmp(g_imgs[i].path, path)==0){ if(w)*w=g_imgs[i].w; if(h)*h=g_imgs[i].h; return g_imgs[i].hb; }
     if (g_nimgs >= 48) return NULL;
     {
-        GpImage *im = NULL;
+        /* 修复: PNG/JPEG 解码得到的是 GpBitmap, 必须用 GdipCreateBitmapFromFile,
+           旧代码把 GdipLoadImageFromFile 的 GpImage* 直接传给
+           GdipCreateHBITMAPFromBitmap(需要 GpBitmap*), 导致永远加载失败。 */
+        GpBitmap *bm = NULL;
         HBITMAP hb = NULL; UINT iw=0, ih=0;
-        if (GdipLoadImageFromFile(path, &im) != Ok || !im) return NULL;
-        GdipGetImageWidth(im, &iw); GdipGetImageHeight(im, &ih);
-        if (GdipCreateHBITMAPFromBitmap(im, &hb, 0) == Ok && hb){
+        if (GdipCreateBitmapFromFile(path, &bm) != Ok || !bm) return NULL;
+        GdipGetImageWidth((GpImage*)bm, &iw); GdipGetImageHeight((GpImage*)bm, &ih);
+        if (GdipCreateHBITMAPFromBitmap(bm, &hb, 0) == Ok && hb){
             g_imgs[g_nimgs].hb = hb;
             wcsncpy(g_imgs[g_nimgs].path, path, MAX_PATH-1);
+            g_imgs[g_nimgs].path[MAX_PATH-1]=0;
             g_imgs[g_nimgs].w = (int)iw; g_imgs[g_nimgs].h = (int)ih;
             if (w) *w = (int)iw; if (h) *h = (int)ih;
             g_nimgs++;
         }
-        GdipDisposeImage(im);
+        GdipDisposeImage((GpImage*)bm);
         return hb;
     }
 }
@@ -826,11 +830,11 @@ void etb_create_layout(void){
     /* 中心: 设计画布 / 积木区 / 两个代码编辑器 */
     g_app.hCanvas = CreateWindowExW(0, L"ETBCanvas", NULL, WS_CHILD, 0,0,600,600, g_app.hMain, NULL, g_app.hInst, NULL);
     g_app.hBlocks = CreateWindowExW(0, L"ETBBlocks", NULL, WS_CHILD|WS_VSCROLL, 0,0,600,600, g_app.hMain, NULL, g_app.hInst, NULL);
-    g_app.hCodeC = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD|ES_MULTILINE|ES_READONLY|WS_VSCROLL|WS_HSCROLL|ES_AUTOVSCROLL,
-                                   0,0,600,600, g_app.hMain, NULL, g_app.hInst, NULL);
+    g_app.hCodeC = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD|ES_MULTILINE|WS_VSCROLL|WS_HSCROLL|ES_AUTOVSCROLL|ES_AUTOHSCROLL|ES_WANTRETURN,
+                                   0,0,600,600, g_app.hMain, (HMENU)IDM_CODEC_EDIT, g_app.hInst, NULL);
     SendMessageW(g_app.hCodeC, WM_SETFONT, (WPARAM)g_app.hFontMono, TRUE);
-    g_app.hCodePy = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD|ES_MULTILINE|ES_READONLY|WS_VSCROLL|WS_HSCROLL|ES_AUTOVSCROLL,
-                                    0,0,600,600, g_app.hMain, NULL, g_app.hInst, NULL);
+    g_app.hCodePy = CreateWindowExW(WS_EX_CLIENTEDGE, L"EDIT", L"", WS_CHILD|ES_MULTILINE|WS_VSCROLL|WS_HSCROLL|ES_AUTOVSCROLL|ES_AUTOHSCROLL|ES_WANTRETURN,
+                                    0,0,600,600, g_app.hMain, (HMENU)IDM_CODEPY_EDIT, g_app.hInst, NULL);
     SendMessageW(g_app.hCodePy, WM_SETFONT, (WPARAM)g_app.hFontMono, TRUE);
 
     /* 左: 工具箱 / 积木库 / 文件浏览器 */

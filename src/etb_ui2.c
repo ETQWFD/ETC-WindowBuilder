@@ -3,34 +3,255 @@
  * 版权: (c) ET 2024-2026
  * ============================================================ */
 #include "etb_internal.h"
+#include <wctype.h>
+#include <wininet.h>
 
-/* ================= 代码视图 ================= */
+/* ================= 代码视图 / 三向同步 ================= */
 static void utf8_to_wbuf(const char *utf8, wchar_t *out, size_t cap){
     MultiByteToWideChar(CP_UTF8, 0, utf8, -1, out, (int)cap);
 }
-void etb_refresh_codes(void){
-    size_t len;
-    char *c = etb_gen_c(&g_app.proj, &len);
-    if (g_app.hCodeC){
-        wchar_t *w = (wchar_t*)malloc((len+2)*sizeof(wchar_t));
-        utf8_to_wbuf(c, w, len+1);
-        SetWindowTextW(g_app.hCodeC, w);
-        free(w);
+
+/* 把 wchar 文本转成 UTF-8, 长度显式、不含结尾 NUL (修复 null bytes) */
+static char *wbuf_to_utf8(const wchar_t *w, size_t wlen, size_t *outlen){
+    int n = WideCharToMultiByte(CP_UTF8, 0, w, (int)wlen, NULL, 0, NULL, NULL);
+    char *o;
+    if (n <= 0) n = 0;
+    o = (char*)malloc(n+1);
+    if (n>0) WideCharToMultiByte(CP_UTF8, 0, w, (int)wlen, o, n, NULL, NULL);
+    o[n]=0; if (outlen)*outlen=(size_t)n; return o;
+}
+
+/* 多行 EDIT 控件需要 \r\n; 生成器输出仅 \n, 这里转换后再显示 */
+static void set_multiline(HWND hEdit, const char *utf8, size_t len){
+    wchar_t *w, *out; size_t need, i, j;
+    if (!hEdit) return;
+    w = (wchar_t*)malloc((len+2)*sizeof(wchar_t));
+    MultiByteToWideChar(CP_UTF8, 0, utf8, (int)len, w, (int)len+1);
+    w[len]=0;
+    need = len + 1;
+    for (i=0;i<len;i++){ if (w[i]==L'\n' && (i==0 || w[i-1]!=L'\r')) need++; }
+    out = (wchar_t*)malloc((need+1)*sizeof(wchar_t));
+    for (i=0,j=0;i<len;i++){
+        if (w[i]==L'\n' && (i==0 || w[i-1]!=L'\r')) out[j++]=L'\r';
+        out[j++]=w[i];
     }
+    out[j]=0;
+    g_app.syncing = 1;
+    SetWindowTextW(hEdit, out);
+    g_app.syncing = 0;
+    free(w); free(out);
+}
+
+void etb_refresh_codes(void){
+    size_t len; char *c;
+    c = etb_gen_c(&g_app.proj, &len);
+    set_multiline(g_app.hCodeC, c, len);
     free(c);
     c = etb_gen_py(&g_app.proj, &len);
-    if (g_app.hCodePy){
-        wchar_t *w = (wchar_t*)malloc((len+2)*sizeof(wchar_t));
-        utf8_to_wbuf(c, w, len+1);
-        SetWindowTextW(g_app.hCodePy, w);
-        free(w);
-    }
+    set_multiline(g_app.hCodePy, c, len);
     free(c);
 }
+
+/* 取编辑器 wchar 原文 (调用者 free) */
+static wchar_t *editor_get_w(HWND hEdit){
+    int n; wchar_t *buf;
+    if (!hEdit) return NULL;
+    n = GetWindowTextLengthW(hEdit);
+    buf = (wchar_t*)malloc((size_t)(n+2)*sizeof(wchar_t));
+    n = GetWindowTextW(hEdit, buf, n+1);
+    buf[n]=0;
+    return buf;
+}
+
+char *etb_current_code_utf8(int which, size_t *len){
+    HWND h = which==0 ? g_app.hCodeC : g_app.hCodePy;
+    if (h && GetWindowTextLengthW(h) > 0){
+        wchar_t *w = editor_get_w(h);
+        char *u = wbuf_to_utf8(w, wcslen(w), len);
+        free(w);
+        return u;
+    }
+    /* 编辑器不可用(如文件模式)时回退到生成器 */
+    return which==0 ? etb_gen_c(&g_app.proj, len) : etb_gen_py(&g_app.proj, len);
+}
+
+/* ---- 反向解析: 从代码文本重建组件, 实现 代码→设计/积木 同步 ---- */
+static const wchar_t *grab_quoted(const wchar_t *from, wchar_t *out, size_t cap){
+    const wchar_t *p = from?wcschr(from, L'"'):NULL;
+    size_t n=0;
+    if (!p) return NULL;
+    p++;
+    while (*p && n+1<cap){
+        if (*p==L'\\' && p[1]){ p++; out[n++]=*p++; }
+        else if (*p==L'"'){ out[n]=0; return p+1; }
+        else out[n++]=*p++;
+    }
+    out[n]=0; return NULL;
+}
+static void grab_attr(const wchar_t *a, const wchar_t *b, const wchar_t *key, wchar_t *out, size_t cap, const wchar_t *dft){
+    size_t kl = wcslen(key); const wchar_t *p=a;
+    out[0]=0;
+    while (p && p<b){
+        const wchar_t *q = wcsstr(p, key);
+        if (!q || q>=b) break;
+        if (grab_quoted(q+kl, out, cap)) return;
+        p = q+1;
+    }
+    if (dft) wcscpy(out, dft);
+}
+/* 在 [a,b) 中取最后4个非负整数 (x,y,w,h) */
+static int last4_ints(const wchar_t *a, const wchar_t *b, int*x,int*y,int*w,int*h){
+    int v[4]={0}, got=0; const wchar_t *q=b;
+    while (q>a && got<4){
+        while (q>a && !iswdigit((wint_t)q[-1])) q--;
+        if (q<=a || !iswdigit((wint_t)q[-1])) break;
+        { long val=0; const wchar_t *e=q, *s=q;
+          while (s>a && iswdigit((wint_t)s[-1])) s--;
+          { const wchar_t*t=s; while(t<e){val=val*10+(*t-L'0');t++;} }
+          v[got++]=(int)val; q=s; }
+    }
+    if (got<4) return 0;
+    *x=v[3];*y=v[2];*w=v[1];*h=v[0]; return 1;
+}
+static void comp_init(Component *c, int type, int id){
+    memset(c,0,sizeof(*c));
+    c->id=id; c->type=type; c->x=40;c->y=40;c->w=100;c->h=34;
+    c->font_size=14; wcscpy(c->shape,L"rectangle"); c->visible=1;
+    wcscpy(c->bg,L"#0078d4"); wcscpy(c->fg,L"#ffffff");
+    if (type==CT_LABEL||type==CT_ENTRY||type==CT_IMAGE||type==CT_COMBO||type==CT_PROGRESS) wcscpy(c->bg,L"#2b2b2b");
+    if (type==CT_COMBO) wcscpy(c->values,L"选项1,选项2,选项3");
+}
+
+static int parse_c_code(const wchar_t *s){
+    Component arr[MAX_COMPS]; int n=0; wchar_t imgp[MAX_COMPS][MAX_PATH]; int hasimg=0;
+    const wchar_t *p=s;
+    memset(imgp,0,sizeof(imgp));
+    /* 收集图片: GdipCreateBitmapFromFile(L"..") ... g_img[i] */
+    { const wchar_t *q=s;
+      while ((q=wcsstr(q,L"GdipCreateBitmapFromFile(L\""))){
+          wchar_t path[MAX_PATH]; int idx=-1; const wchar_t *r;
+          r = grab_quoted(q+wcslen(L"GdipCreateBitmapFromFile(L"), path, MAX_PATH);
+          if (r){ const wchar_t *g=wcsstr(r,L"g_img["); if(g){ const wchar_t*t=g+6; idx=0; while(iswdigit((wint_t)*t)){idx=idx*10+(*t-L'0');t++;} } }
+          if (idx>=0 && idx<MAX_COMPS){ wcscpy(imgp[idx],path); hasimg=1; }
+          q=r?r:q+1;
+      } }
+    while ((p=wcsstr(p,L"g_h[")) && n<MAX_COMPS){
+        const wchar_t *cw = wcsstr(p,L"CreateWindowW(L\"");
+        const wchar_t *hwndp = wcsstr(p,L", hwnd,");
+        if (!cw || !hwndp || hwndp>p+600){ p+=3; continue; }
+        {
+            wchar_t cls[128]={0}, txt[260]={0}; int x,y,w,h,type;
+            const wchar_t *after;
+            after = grab_quoted(cw+wcslen(L"CreateWindowW(L"), cls, 128);
+            if (after) grab_quoted(after, txt, 260);
+            { const wchar_t *vis=wcsstr(p,L"WS_VISIBLE"); const wchar_t *a = vis?vis+10:p;
+              if (!last4_ints(a, hwndp, &x,&y,&w,&h)){ p+=3; continue; } }
+            if (wcscmp(cls,L"BUTTON")==0){
+                if (wcsstr(p,L"BS_AUTOCHECKBOX")) type=CT_CHECK;
+                else if (wcsstr(p,L"BS_AUTORADIOBUTTON")) type=CT_RADIO;
+                else type=CT_BUTTON;
+            } else if (wcscmp(cls,L"STATIC")==0) type=CT_LABEL;
+            else if (wcscmp(cls,L"EDIT")==0) type=CT_ENTRY;
+            else if (wcscmp(cls,L"COMBOBOX")==0) type=CT_COMBO;
+            else if (wcsstr(cls,L"progress")||wcsstr(cls,L"Progress")) type=CT_PROGRESS;
+            else { p+=3; continue; }
+            comp_init(&arr[n],type,n);
+            wcscpy(arr[n].text, txt[0]?txt:L"");
+            arr[n].x=x;arr[n].y=y;arr[n].w=w;arr[n].h=h;
+            if (hasimg && imgp[n][0]){ arr[n].type=CT_IMAGE; wcscpy(arr[n].image_path,imgp[n]); }
+            n++;
+        }
+        p = hwndp+1;
+    }
+    if (n==0) return 0;
+    { int i; for (i=0;i<n;i++) g_app.proj.comps[i]=arr[i];
+      g_app.proj.ncomps=n; if (g_app.proj.next_id<n) g_app.proj.next_id=n; }
+    /* 窗口标题/尺寸/背景 */
+    { wchar_t t[256]; const wchar_t*q=wcsstr(s,L"CreateWindowExW(0, L\"ETCGenApp\", L\"");
+      if (q && grab_quoted(q+wcslen(L"CreateWindowExW(0, L\"ETCGenApp\", L"), t, 256)) wcscpy(g_app.proj.title,t); }
+    return 1;
+}
+
+static int parse_py_code(const wchar_t *s){
+    static const struct { const wchar_t *kw; int type; int isimg; } keys[] = {
+        {L"tk.Button",CT_BUTTON,0},{L"tk.Label",CT_LABEL,0},{L"tk.Entry",CT_ENTRY,0},
+        {L"tk.Checkbutton",CT_CHECK,0},{L"tk.Radiobutton",CT_RADIO,0},
+        {L"ttk.Combobox",CT_COMBO,0},{L"ttk.Progressbar",CT_PROGRESS,0},
+        {L"Image.open",CT_IMAGE,1},
+    };
+    Component arr[MAX_COMPS]; int n=0; const wchar_t *cur=s;
+    for (;;){
+        int k, best=-1; const wchar_t *bestp=NULL;
+        for (k=0;k<8;k++){ const wchar_t *q=wcsstr(cur,keys[k].kw);
+            if (q && (!bestp || q<bestp)){ bestp=q; best=k; } }
+        if (best<0 || !bestp || n>=MAX_COMPS) break;
+        {
+            const wchar_t *place = wcsstr(bestp,L".place(");
+            const wchar_t *next = place? place+7 : bestp+wcslen(keys[best].kw);
+            int x,y,w,h;
+            if (!place){ cur=bestp+1; continue; }
+            if (swscanf(place,L".place(x=%d, y=%d, width=%d, height=%d)",&x,&y,&w,&h)!=4){
+                cur=next; continue;
+            }
+            comp_init(&arr[n], keys[best].type, n);
+            arr[n].x=x;arr[n].y=y;arr[n].w=w;arr[n].h=h;
+            if (keys[best].isimg){
+                wchar_t path[MAX_PATH];
+                if (grab_quoted(bestp, path, MAX_PATH)) wcscpy(arr[n].image_path,path);
+            } else {
+                wchar_t t[260],bg[40],fg[40];
+                grab_attr(bestp,place,L"text=\"",t,260,NULL);
+                grab_attr(bestp,place,L"bg=\"",bg,40,NULL);
+                grab_attr(bestp,place,L"fg=\"",fg,40,NULL);
+                if (t[0]) wcscpy(arr[n].text,t);
+                if (bg[0]) wcscpy(arr[n].bg,bg);
+                if (fg[0]) wcscpy(arr[n].fg,fg);
+            }
+            n++; cur=next;
+        }
+    }
+    if (n==0) return 0;
+    { int i; for (i=0;i<n;i++) g_app.proj.comps[i]=arr[i];
+      g_app.proj.ncomps=n; if (g_app.proj.next_id<n) g_app.proj.next_id=n; }
+    { wchar_t t[260]; const wchar_t*q;
+      q=wcsstr(s,L".title(\""); if(q){ if(grab_quoted(q+8,t,260)) wcscpy(g_app.proj.title,t); }
+      q=wcsstr(s,L".geometry(\""); if(q){ if(grab_quoted(q+11,t,260)) wcscpy(g_app.proj.size,t); }
+      q=wcsstr(s,L"configure(bg=\""); if(q){ if(grab_quoted(q+14,t,40)) wcscpy(g_app.proj.bg,t); } }
+    return 1;
+}
+
+void etb_code_parse_now(void){
+    wchar_t *w; int ok=0;
+    if (g_app.parse_which==0){
+        if ((w=editor_get_w(g_app.hCodeC))){ ok=parse_c_code(w); free(w); }
+    } else {
+        if ((w=editor_get_w(g_app.hCodePy))){ ok=parse_py_code(w); free(w); }
+    }
+    if (!ok){ etb_log(L"代码格式暂无法解析为组件(可继续手动编辑)"); return; }
+    g_app.sel=-1;
+    etb_refresh_canvas(); etb_refresh_props(); etb_refresh_blocks();
+    /* 用更新后的项目重新生成"另一种"语言; 当前页保留用户代码 */
+    {
+        size_t len; char *c;
+        g_app.syncing=1;
+        c = etb_gen_c(&g_app.proj,&len); set_multiline(g_app.hCodeC,c,len); free(c);
+        c = etb_gen_py(&g_app.proj,&len); set_multiline(g_app.hCodePy,c,len); free(c);
+        g_app.syncing=0;
+    }
+    etb_refresh_files();
+    etb_log(L"已从%s代码同步到设计/积木", g_app.parse_which==0?L"C":L"Python");
+}
+
+void etb_code_changed(int which){
+    if (g_app.syncing) return;
+    g_app.parse_which = which;
+    SetTimer(g_app.hMain, IDT_CODEPARSE, 400, NULL);   /* 防抖 */
+}
+
 void etb_sync_from_code(void){
-    /* 设计/积木为唯一数据源: 重新生成代码并刷新 */
-    etb_refresh_codes();
-    etb_log(L"代码已重新生成 (设计/积木 → C/Python)");
+    /* “同步代码”按钮: 以当前所在代码页为准, 反向同步到设计器 */
+    g_app.parse_which = (g_app.mode==MODE_CODE_PY)?1:0;
+    etb_code_parse_now();
 }
 
 /* ================= 积木区 ================= */
@@ -78,28 +299,50 @@ LRESULT CALLBACK BlocksProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
         HBRUSH br = CreateSolidBrush(C_BG); FillRect(hdc, &rc, br); DeleteObject(br);
         {
             int i;
+            HBRUSH hbg = CreateSolidBrush(C_BG);
             for (i=0;i<g_app.proj.nblocks;i++){
                 Block *b = &g_app.proj.blocks[i];
                 int di = etb_block_find(b->type);
                 COLORREF col = di>=0 ? g_blockdefs[di].color : RGB(120,120,120);
+                COLORREF edge = (i==g_app.bsel)? RGB(120,220,255) : RGB(255,255,255);
+                int isEvent = etb_block_is_event(b->type);
+                int isEnd = etb_block_has_end(b->type);
+                int depth = block_depth(i);
+                int cx;
                 RECT r; wchar_t txt[512];
                 block_rect(i, &r, rc.right-rc.left);
-                r.left += block_depth(i)*18;
-                /* 圆角块 */
-                HRGN rg = CreateRoundRectRgn(r.left, r.top, r.right, r.bottom, 12, 12);
-                HBRUSH fb = CreateSolidBrush(col);
-                FillRgn(hdc, rg, fb);
+                r.left += depth*22;
+                if (isEnd) r.left += 26;          /* 结束块内缩、变短 */
+                cx = r.left + 60;
                 {
-                    HPEN pn = CreatePen(PS_SOLID, i==g_app.bsel?2:1, i==g_app.bsel?RGB(120,220,255):RGB(255,255,255));
-                    HGDIOBJ op = SelectObject(hdc, pn);
+                    HBRUSH fb = CreateSolidBrush(col);
+                    HPEN pn = CreatePen(PS_SOLID, i==g_app.bsel?2:1, edge);
                     HGDIOBJ ob = SelectObject(hdc, GetStockObject(NULL_BRUSH));
-                    Rectangle(hdc, r.left, r.top, r.right, r.bottom);
-                    SelectObject(hdc, op); SelectObject(hdc, ob); DeleteObject(pn);
+                    HGDIOBJ op = SelectObject(hdc, pn);
+                    SelectObject(hdc, fb);
+                    if (isEvent){
+                        /* 事件块: 编程猫式圆帽(顶部大圆角, 向上凸起) */
+                        RoundRect(hdc, r.left, r.top-10, r.right, r.bottom, 20, 20);
+                    } else {
+                        if (!isEnd){
+                            /* 顶部凸舌(插入上一块底部凹槽) */
+                            RoundRect(hdc, cx-24, r.top-8, cx+24, r.top+6, 10, 10);
+                        }
+                        RoundRect(hdc, r.left, r.top, r.right, r.bottom, isEnd?8:12, isEnd?8:12);
+                    }
+                    SelectObject(hdc, ob); SelectObject(hdc, op);
+                    DeleteObject(fb); DeleteObject(pn);
+                    if (!isEnd){
+                        /* 底部凹槽: 用背景色挖一个半圆缺口, 下一块凸舌嵌入 */
+                        HGDIOBJ ob2 = SelectObject(hdc, GetStockObject(NULL_PEN));
+                        SelectObject(hdc, hbg);
+                        Ellipse(hdc, cx-9, r.bottom-5, cx+9, r.bottom+5);
+                        SelectObject(hdc, ob2);
+                    }
                 }
-                DeleteObject(fb); DeleteObject(rg);
                 etb_block_display(b, txt, 512);
                 {
-                    RECT tr = r; tr.left += 12; tr.right -= 6;
+                    RECT tr = r; tr.left += (isEvent?40:16); tr.right -= 8; tr.top -= isEvent?6:0;
                     SetTextColor(hdc, RGB(255,255,255));
                     SetBkMode(hdc, TRANSPARENT);
                     HFONT f = CreateFontW(-16,0,0,0,FW_SEMIBOLD,0,0,0,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Microsoft YaHei UI");
@@ -108,6 +351,7 @@ LRESULT CALLBACK BlocksProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp){
                     SelectObject(hdc, of); DeleteObject(f);
                 }
             }
+            DeleteObject(hbg);
         }
         EndPaint(hwnd, &ps);
         return 0;
@@ -1096,12 +1340,14 @@ void etb_do_package(void){
             swprintf(build, MAX_PATH, L"%lsETCBuilder_pack_%lu", tmp, GetTickCount());
             CreateDirectoryW(build, NULL);
             {
-                wchar_t src[MAX_PATH], exe_name[MAX_PATH], setup_name[MAX_PATH], err[4096];
+                wchar_t src[MAX_PATH], exe_name[MAX_PATH], exe_tmp[MAX_PATH], setup_name[MAX_PATH], err[4096];
                 size_t len; char *code = etb_gen_c(&g_app.proj, &len);
                 wchar_t app_name[160];
+                int exe_ok = 0;
                 swprintf(app_name, 160, L"%ls.exe", g_app.pkg_app[0]?g_app.pkg_app:L"ETCWindowBuilderApp");
                 swprintf(src, MAX_PATH, L"%ls\\main.c", build);
-                swprintf(exe_name, MAX_PATH, L"%ls\\%ls", dir, app_name);
+                swprintf(exe_tmp, MAX_PATH, L"%ls\\%ls", build, app_name);     /* 先在临时目录编译 */
+                swprintf(exe_name, MAX_PATH, L"%ls\\%ls", dir, app_name);     /* 最终目标 */
                 swprintf(setup_name, MAX_PATH, L"%ls\\ETCWindowBuilder-Setup-v%ls.exe", dir, g_app.pkg_ver[0]?g_app.pkg_ver:VERSION_W);
                 {
                     HANDLE h = CreateFileW(src, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
@@ -1110,12 +1356,34 @@ void etb_do_package(void){
                 }
                 free(code);
                 etb_log(L"编译EXE: %ls", app_name);
-                if (!etb_compile_c_source(src, exe_name, g_app.pkg_icon[0]?g_app.pkg_icon:NULL, err, 4096)){
+                if (!etb_compile_c_source(src, exe_tmp, g_app.pkg_icon[0]?g_app.pkg_icon:NULL, err, 4096)){
                     etb_log(L"打包失败: %ls", err);
                     MessageBoxW(g_app.hMain, err, L"打包失败", MB_OK|MB_ICONERROR);
                     return;
                 }
-                etb_log(L"EXE生成成功: %ls", exe_name);
+                /* 部署到用户目录: 旧文件可能正被占用(Permission denied),
+                   先尝试删除旧文件再复制; 仍失败则改用带时间戳的新文件名。 */
+                if (PathFileExistsW(exe_name)) DeleteFileW(exe_name);
+                if (CopyFileW(exe_tmp, exe_name, FALSE)){
+                    exe_ok = 1;
+                    etb_log(L"EXE生成成功: %ls", exe_name);
+                } else {
+                    wchar_t alt[MAX_PATH];
+                    swprintf(alt, MAX_PATH, L"%ls\\%ls_%lu.exe", dir,
+                             g_app.pkg_app[0]?g_app.pkg_app:L"ETCWindowBuilderApp", GetTickCount());
+                    if (CopyFileW(exe_tmp, alt, FALSE)){
+                        wcscpy(exe_name, alt); exe_ok = 1;
+                        etb_log(L"目标文件被占用, 已另存为: %ls", alt);
+                        MessageBoxW(g_app.hMain,
+                            L"原来的 EXE 正在运行或被占用, 无法覆盖。\n已改用新文件名保存(见日志), 请关闭旧程序后重试以使用原文件名。",
+                            L"文件被占用", MB_OK|MB_ICONWARNING);
+                    } else {
+                        etb_log(L"无法写入目标目录, EXE 保留在临时构建目录");
+                        MessageBoxW(g_app.hMain,
+                            L"无法写入所选目录(权限不足或文件被占用)。\nEXE 已在临时构建目录生成, 请更换输出目录(如文档/桌面)后重试。",
+                            L"打包失败", MB_OK|MB_ICONERROR);
+                    }
+                }
                 /* 复制学习文档 */
                 {
                     wchar_t docs_src[MAX_PATH], docs_dst[MAX_PATH];
@@ -1229,4 +1497,66 @@ void etb_explorer_import(void){
         etb_refresh_files();
         etb_log(L"已导入: %ls", item);
     }
+}
+
+/* ================= 帮助: 检查更新 ================= */
+static void ver_parts(const char *s, int *maj, int *minv){
+    *maj=0;*minv=0;
+    while (*s && (*s<'0'||*s>'9')) s++;   /* 跳过 v 等前缀 */
+    while (*s>='0'&&*s<='9'){ *maj=*maj*10+(*s-'0'); s++; }
+    if (*s=='.'){ s++; while (*s>='0'&&*s<='9'){ *minv=*minv*10+(*s-'0'); s++; } }
+}
+void etb_check_update(void){
+    static const wchar_t *ua = L"ETC-WindowBuilder-Updater/12.0";
+    static const wchar_t *accept = L"application/vnd.github+json";
+    static const wchar_t *api = L"/repos/ETQWFD/ETC-WindowBuilder/releases/latest";
+    HINTERNET hNet=NULL,hConn=NULL,hReq=NULL;
+    char *body=NULL; DWORD total=0,cap=0;
+    int ok=0; char tag[64]={0};
+    etb_log(L"正在检查更新...");
+    hNet = InternetOpenW(ua, INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0);
+    if (!hNet) goto done;
+    { DWORD to=8000; InternetSetOptionW(hNet, INTERNET_OPTION_CONNECT_TIMEOUT,&to,sizeof(to));
+      InternetSetOptionW(hNet, INTERNET_OPTION_RECEIVE_TIMEOUT,&to,sizeof(to)); }
+    hConn = InternetConnectW(hNet, L"api.github.com", INTERNET_DEFAULT_HTTPS_PORT,
+                             NULL, NULL, INTERNET_SERVICE_HTTP, 0, 0);
+    if (!hConn) goto done;
+    hReq = HttpOpenRequestW(hConn, L"GET", api, NULL, NULL, NULL,
+                            INTERNET_FLAG_SECURE|INTERNET_FLAG_NO_CACHE_WRITE|INTERNET_FLAG_RELOAD, 0);
+    if (!hReq) goto done;
+    HttpAddRequestHeadersW(hReq, accept, (DWORD)-1L, HTTP_ADDREQ_FLAG_ADD);
+    if (!HttpSendRequestW(hReq, NULL, 0, NULL, 0)) goto done;
+    { DWORD sc=0, lsz=sizeof(sc);
+      HttpQueryInfoW(hReq, HTTP_QUERY_STATUS_CODE|HTTP_QUERY_FLAG_NUMBER, &sc, &lsz, NULL);
+      if (sc!=200) goto done; }
+    cap=8192; body=(char*)malloc(cap+1);
+    for (;;){
+        DWORD got=0;
+        if (total+4096 > cap){ cap*=2; body=(char*)realloc(body,cap+1); }
+        if (!InternetReadFile(hReq, body+total, 4096, &got) || got==0) break;
+        total+=got;
+    }
+    if (body){ body[total]=0;
+        const char *p=strstr(body,"\"tag_name\"");
+        if (p){ p=strchr(p,':'); if(p){ p=strchr(p,'"'); if(p){ p++; int k=0; while(*p && *p!='"' && k<60) tag[k++]=*p++; tag[k]=0; ok=1; } } }
+    }
+done:
+    if (hReq)InternetCloseHandle(hReq); if(hConn)InternetCloseHandle(hConn); if(hNet)InternetCloseHandle(hNet);
+    if (ok){
+        int lm,ln,rm,rn; ver_parts(VERSION_A,&lm,&ln); ver_parts(tag,&rm,&rn);
+        if (rm>lm || (rm==lm&&rn>ln)){
+            wchar_t msg[512];
+            swprintf(msg,512,L"发现新版本: %hs\n当前版本: %hs\n\n是否前往 GitHub Releases 下载最新安装包?", tag, VERSION_A);
+            if (MessageBoxW(g_app.hMain,msg,L"检查更新",MB_YESNO|MB_ICONINFORMATION)==IDYES)
+                ShellExecuteW(NULL,L"open",L"https://github.com/ETQWFD/ETC-WindowBuilder/releases/latest",NULL,NULL,SW_SHOWNORMAL);
+        } else {
+            wchar_t msg[256]; swprintf(msg,256,L"当前已是最新版本。\n本地版本: %hs\n最新版本: %hs",VERSION_A,tag);
+            MessageBoxW(g_app.hMain,msg,L"检查更新",MB_OK|MB_ICONINFORMATION);
+        }
+        etb_log(L"最新版本: %hs (本地 %hs)", tag, VERSION_A);
+    } else {
+        if (MessageBoxW(g_app.hMain,L"无法连接到更新服务器(GitHub)。\n是否手动打开下载页面?",L"检查更新失败",MB_YESNO|MB_ICONWARNING)==IDYES)
+            ShellExecuteW(NULL,L"open",L"https://github.com/ETQWFD/ETC-WindowBuilder/releases",NULL,NULL,SW_SHOWNORMAL);
+    }
+    free(body);
 }

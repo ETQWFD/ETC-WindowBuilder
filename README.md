@@ -3,16 +3,16 @@
 > 一款用 **C 语言 / Win32 / GDI+** 从零实现的可视化 GUI 构建器，面向所有技术人员的学习与开发软件。
 
 开发者：**ET**　公司：**ET Studio**　测试：小态度轩, 威龙
-版权：**(c) ET 2024-2026**　版本：**11.0**
+版权：**(c) ET 2024-2026**　版本：**12.0**
 
 ---
 
 ## 下载安装（装完即用，无需另装任何编译器）
 
 - 完整离线安装包（内置 MinGW GCC + Python 3 + OpenJDK 17，约 1.1GB）：
-  **[ETCWindowBuilder-Setup-v11.0.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v11.0/ETCWindowBuilder-Setup-v11.0.exe)**
+  **[ETCWindowBuilder-Setup-v12.0.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.0/ETCWindowBuilder-Setup-v12.0.exe)**
 - 绿色版主程序（不含内置工具链）：
-  **[ETC-WindowBuilder.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v11.0/ETC-WindowBuilder.exe)**
+  **[ETC-WindowBuilder.exe](https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v12.0/ETC-WindowBuilder.exe)**
 - 全部版本见 [Releases](https://github.com/ETQWFD/ETC-WindowBuilder/releases)。支持 Windows 7/10/11 x64；Linux 下可用 Wine 运行。
 
 ![主界面](screenshots/41_main.png)
@@ -51,7 +51,7 @@ ETCWindowBuilder/
 
 ## 快速开始
 
-1. 运行安装包 `ETCWindowBuilder-Setup-v11.0.exe`（或直接运行绿色版 EXE）。
+1. 运行安装包 `ETCWindowBuilder-Setup-v12.0.exe`（或直接运行绿色版 EXE）。
 2. 左侧「设计」页点击工具箱添加组件，在中间画布拖拽定位，右侧面板修改属性。
 3. 切换「积木」页为按钮添加点击逻辑。
 4. 点顶部 **运行**：在 C 代码页编译运行 C 程序；在 Py 代码页运行 Python 程序。
