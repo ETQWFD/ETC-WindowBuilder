@@ -4,7 +4,6 @@
 ;  内置 MinGW GCC / CPython / OpenJDK，装完即用
 ; ============================================================
 Unicode true
-TargetPlatform x64
 !define APPNAME   "ETC WindowBuilder"
 !define COMPANY   "ET Studio"
 !define VERSION   "11.0"
@@ -56,17 +55,17 @@ Section "${APPNAME} 主程序（必选）" SecCore
 SectionEnd
 
 Section "C/C++ 工具链 (MinGW-w64 GCC)" SecGCC
-  SetOutPath "$INSTDIR"
+  SetOutPath "$INSTDIR\runtime"
   File /r "..\runtime\mingw64"
 SectionEnd
 
 Section "Python 3 运行环境 (含 tkinter)" SecPy
-  SetOutPath "$INSTDIR"
+  SetOutPath "$INSTDIR\runtime"
   File /r "..\runtime\python"
 SectionEnd
 
 Section "Java 开发环境 (OpenJDK 17)" SecJDK
-  SetOutPath "$INSTDIR"
+  SetOutPath "$INSTDIR\runtime"
   File /r "..\runtime\jdk"
 SectionEnd
 
