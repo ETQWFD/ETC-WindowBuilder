@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ETC WindowBuilder 专业版 — 纯 C 语言可视化 GUI 构建器</title>
+<meta name="description" content="用纯 C / Win32 / GDI+ 从零实现的可视化 GUI 构建器与积木式编程 IDE，内置 MinGW GCC / Python / OpenJDK，装完即用。">
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --fg:#e8ebf0; --muted:#9aa3b2; --accent:#0078d4; --accent2:#2aa0ff;
+    --ok:#3fb950; --gold:#e3b341;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--fg);font-family:"Segoe UI","Microsoft YaHei",system-ui,sans-serif;line-height:1.65}
+  a{color:var(--accent2);text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+  header.nav{position:sticky;top:0;z-index:20;background:rgba(15,17,21,.88);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;letter-spacing:.3px}
+  .logo{width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:grid;place-items:center;font-size:15px;color:#fff;font-weight:800}
+  .nav a{color:var(--muted);margin-left:22px;font-size:14px}
+  .nav a:hover{color:var(--fg)}
+  .hero{padding:72px 0 40px;text-align:center}
+  .tag{display:inline-block;font-size:13px;color:var(--accent2);border:1px solid #1d4e7a;background:#10233a;padding:5px 14px;border-radius:999px;margin-bottom:20px}
+  h1{font-size:44px;line-height:1.18;letter-spacing:.5px}
+  h1 .hl{background:linear-gradient(90deg,var(--accent2),#7cc4ff);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:18px;margin:18px auto 0;max-width:760px}
+  .cta{margin-top:32px;display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:13px 26px;border-radius:9px;font-weight:600;font-size:15px;border:1px solid transparent;transition:.15s}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-primary:hover{background:#1086e6}
+  .btn-ghost{background:transparent;color:var(--fg);border-color:var(--line)}
+  .btn-ghost:hover{border-color:var(--accent2)}
+  .meta{margin-top:16px;color:var(--muted);font-size:13px}
+  .shot{margin:46px auto 0;border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:0 24px 70px rgba(0,0,0,.5);max-width:960px}
+  .shot img{width:100%;display:block}
+  section{padding:56px 0;border-top:1px solid var(--line)}
+  h2{font-size:28px;margin-bottom:8px}
+  .lead{color:var(--muted);margin-bottom:30px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:22px}
+  .card .ic{font-size:22px}
+  .card h3{font-size:17px;margin:10px 0 6px}
+  .card p{color:var(--muted);font-size:14px}
+  .tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .tool{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:20px}
+  .tool .ver{color:var(--ok);font-size:13px;font-family:Consolas,monospace}
+  .tool h3{margin:6px 0 4px;font-size:17px}
+  .tool p{color:var(--muted);font-size:13.5px}
+  ol.steps{counter-reset:s;list-style:none;max-width:760px}
+  ol.steps li{counter-increment:s;position:relative;padding:12px 0 12px 48px;border-bottom:1px dashed var(--line);color:var(--muted)}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:11px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:14px}
+  ol.steps li b{color:var(--fg)}
+  table.dl{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  table.dl th,table.dl td{padding:14px 16px;text-align:left;border-bottom:1px solid var(--line);font-size:14.5px}
+  table.dl th{background:var(--panel2);color:var(--muted);font-weight:600}
+  table.dl tr:last-child td{border-bottom:none}
+  code{background:#0c0e13;border:1px solid var(--line);border-radius:5px;padding:2px 7px;font-family:Consolas,monospace;font-size:13px;color:#a5d6ff}
+  pre{background:#0c0e13;border:1px solid var(--line);border-radius:10px;padding:16px;overflow:auto;margin-top:14px}
+  pre code{background:none;border:none;padding:0;color:#c9d1d9}
+  footer{padding:40px 0 60px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px;text-align:center}
+  footer .copy{color:var(--gold);font-weight:600}
+  @media(max-width:640px){h1{font-size:32px}.nav a:not(.gh){display:none}}
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="wrap nav-in">
+    <div class="brand"><span class="logo">E</span> ETC WindowBuilder</div>
+    <nav>
+      <a href="#features">功能</a>
+      <a href="#tools">内置工具链</a>
+      <a href="#start">快速开始</a>
+      <a href="#download">下载</a>
+      <a class="gh" href="https://github.com/ETQWFD/ETC-WindowBuilder">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="hero">
+    <span class="tag">专业版 v11.0 · 纯 C / Win32 / GDI+</span>
+    <h1>用 <span class="hl">C 语言</span> 打造的<br>可视化 GUI 构建器与积木式编程 IDE</h1>
+    <p class="sub">拖一拖就能设计窗口、拼积木即可写逻辑，一键编译运行 C / Python / Java。面向所有技术人员的学习与开发软件，安装包内置完整工具链，<b>装完即用，无需任何配置</b>。</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v11.0/ETCWindowBuilder-Setup-v11.0.exe">⬇ 下载完整离线安装包</a>
+      <a class="btn btn-ghost" href="https://github.com/ETQWFD/ETC-WindowBuilder">查看源码</a>
+    </div>
+    <div class="meta">Windows 7/10/11 x64 · 安装包约 284 MB（安装后约 1.1 GB）· 开发者 ET · ET Studio</div>
+    <div class="shot">
+      <img src="https://raw.githubusercontent.com/ETQWFD/ETC-WindowBuilder/main/screenshots/41_main.png" alt="ETC WindowBuilder 主界面">
+    </div>
+  </div>
+</div>
+
+<section id="features"><div class="wrap">
+  <h2>核心功能</h2>
+  <p class="lead">从界面到代码，从积木到可执行程序，一个工具全部覆盖。</p>
+  <div class="grid">
+    <div class="card"><div class="ic">🖱️</div><h3>可视化 UI 设计</h3><p>拖放按钮、标签、输入框、复选框、单选钮、下拉列表、进度条、图片，以及星形 / 菱形 / 圆形特殊形状；支持缩放、层级、颜色与字体设置。</p></div>
+    <div class="card"><div class="ic">🧩</div><h3>积木式编程</h3><p>为「窗口启动 / 按钮点击 / 窗口关闭」等事件组装动作——弹消息、打开文件或网址、设置文本、变量赋值、判断与循环，无需记语法。</p></div>
+    <div class="card"><div class="ic">🔄</div><h3>三向实时同步</h3><p>设计画布、C 代码、Python 代码任意一处修改，其余两处自动更新，所见即所得。</p></div>
+    <div class="card"><div class="ic">⚙️</div><h3>一键编译运行</h3><p>C 用内置 GCC 编译为静态独立 EXE；Python 直接运行 tkinter；Java 直接 javac/java；文件模式可处理磁盘上的源码。</p></div>
+    <div class="card"><div class="ic">🔐</div><h3>加密工程文件</h3><p><code>.nep</code> 项目采用 PBKDF2-HMAC-SHA256 + ChaCha20 加密保存，可设置密码保护。</p></div>
+    <div class="card"><div class="ic">📦</div><h3>一键打包发布</h3><p>把项目编译为带 ET 版本资源与图标的 EXE，并生成标准 NSIS Windows 安装程序。</p></div>
+  </div>
+</div></section>
+
+<section id="tools"><div class="wrap">
+  <h2>内置完整工具链，装完即用</h2>
+  <p class="lead">无需另外安装编译器、解释器或 JDK，也无需手动配置 PATH，全部绿色便携。</p>
+  <div class="tools">
+    <div class="tool"><div class="ver">GCC 14.2.0</div><h3>MinGW-w64</h3><p>C / C++ 编译器、windres、ld、g++，位于 <code>runtime\mingw64</code></p></div>
+    <div class="tool"><div class="ver">CPython 3.11.16</div><h3>Python 3</h3><p>含 tkinter / Tcl-Tk，可直接运行 GUI 程序，位于 <code>runtime\python</code></p></div>
+    <div class="tool"><div class="ver">OpenJDK 17.0.20</div><h3>Temurin JDK</h3><p>javac / java / jar，位于 <code>runtime\jdk</code></p></div>
+  </div>
+</div></section>
+
+<section id="start"><div class="wrap">
+  <h2>快速开始</h2>
+  <p class="lead">从安装到写出第一个窗口程序，只需几分钟。</p>
+  <ol class="steps">
+    <li>运行 <b>ETCWindowBuilder-Setup-v11.0.exe</b> 完成离线安装（开始菜单与桌面会创建快捷方式）。</li>
+    <li>在左侧「设计」页点击工具箱<b>添加组件</b>，中间画布拖拽定位，右侧面板修改属性。</li>
+    <li>切到「积木」页为按钮<b>组装点击逻辑</b>。</li>
+    <li>点顶部 <b>运行</b>：C 代码页编译运行 C 程序，Py 代码页运行 Python 程序。</li>
+    <li>「文件」页可直接编译运行磁盘上的 <code>.c</code> / <code>.py</code> / <code>.java</code> 文件。</li>
+    <li>用「文件 → 保存项目」把工程保存为加密 <code>.nep</code>，或「打包 EXE」发布你的程序。</li>
+  </ol>
+  <p class="lead" style="margin-top:24px">进阶内容见仓库 <code>docs/tutorials/</code> 的 8 篇中文教程：快速入门、可视化设计、积木编程、C/Python/Java 开发、加密项目与打包、内置工具链说明。</p>
+</div></section>
+
+<section id="download"><div class="wrap">
+  <h2>下载</h2>
+  <p class="lead">完整安装包含三套工具链；绿色版体积最小，需自备编译器。</p>
+  <table class="dl">
+    <tr><th>文件</th><th>说明</th><th>大小</th></tr>
+    <tr>
+      <td><a href="https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v11.0/ETCWindowBuilder-Setup-v11.0.exe"><b>ETCWindowBuilder-Setup-v11.0.exe</b></a></td>
+      <td>完整离线安装包，装完即用</td><td>约 284 MB</td>
+    </tr>
+    <tr>
+      <td><a href="https://github.com/ETQWFD/ETC-WindowBuilder/releases/download/v11.0/ETC-WindowBuilder.exe">ETC-WindowBuilder.exe</a></td>
+      <td>绿色版主程序（不含内置工具链）</td><td>约 1 MB</td>
+    </tr>
+  </table>
+  <p class="meta" style="text-align:left;margin-top:14px">全部版本见 <a href="https://github.com/ETQWFD/ETC-WindowBuilder/releases">GitHub Releases</a>。Linux 下可用 Wine 运行。</p>
+  <h2 style="margin-top:44px">从源码构建</h2>
+  <pre><code># Ubuntu 交叉编译
+sudo apt install gcc-mingw-w64-x86-64 nsis
+
+cd src
+x86_64-w64-mingw32-windres builder.rc -O coff -o builder.o
+x86_64-w64-mingw32-gcc -O2 -mwindows -finput-charset=UTF-8 \
+  etb_main.c etb_ui.c etb_ui2.c etb_gen.c etb_blocks.c etb_crypto.c etb_save.c builder.o \
+  -o ../release/ETC-WindowBuilder.exe \
+  -lgdi32 -lcomctl32 -lgdiplus -lshell32 -lshlwapi -lole32 -luuid -lcomdlg32 -static
+
+cd ../installer &amp;&amp; makensis ETCWindowBuilder.nsi</code></pre>
+</div></section>
+
+<footer>
+  <div class="wrap">
+    <p class="copy">版权所有 © ET / ET Studio 2024–2026</p>
+    <p style="margin-top:6px">本软件可自由用于学习与个人开发，禁止未经授权的商业再分发。<br>
+    内置 MinGW-w64/GCC、CPython、Eclipse Temurin/OpenJDK 遵循各自开源许可。</p>
+    <p style="margin-top:12px"><a href="https://github.com/ETQWFD/ETC-WindowBuilder">GitHub 仓库</a> · <a href="https://github.com/ETQWFD/ETC-WindowBuilder/releases">Releases</a></p>
+  </div>
+</footer>
+</body>
+</html>
