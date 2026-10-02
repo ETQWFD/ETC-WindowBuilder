@@ -4,6 +4,7 @@
 ;  内置 MinGW GCC / CPython / OpenJDK，装完即用
 ; ============================================================
 Unicode true
+TargetPlatform x64
 !define APPNAME   "ETC WindowBuilder"
 !define COMPANY   "ET Studio"
 !define VERSION   "11.0"
